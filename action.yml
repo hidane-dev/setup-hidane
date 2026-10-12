@@ -1,0 +1,44 @@
+name: Setup hidane
+description: Install hidane, a Firestore emulator without Java, after checking its SHA-256 and build provenance, and add it to PATH.
+author: hidane-dev
+branding:
+  icon: zap
+  color: orange
+
+inputs:
+  version:
+    description: The hidane version to install, `latest` or an exact version such as `0.3.0` or `v0.3.0`.
+    required: false
+    default: latest
+  verify-attestation:
+    description: >-
+      Verify the archive's build provenance attestation with `gh attestation verify` (`true` or
+      `false`). Without `gh` on PATH, the check is skipped with a notice.
+    required: false
+    default: "true"
+  token:
+    description: The token for the GitHub API and `gh`; it reads public data only.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: The installed version, such as `0.3.0`.
+    value: ${{ steps.setup.outputs.version }}
+  path:
+    description: The absolute path of the `hidane` binary (`hidane.exe` on Windows).
+    value: ${{ steps.setup.outputs.path }}
+  cache-hit:
+    description: "`true` when the archive came from the runner's tool cache, `false` when it was downloaded."
+    value: ${{ steps.setup.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - id: setup
+      shell: bash
+      env:
+        SETUP_HIDANE_VERSION: ${{ inputs.version }}
+        SETUP_HIDANE_VERIFY_ATTESTATION: ${{ inputs.verify-attestation }}
+        SETUP_HIDANE_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/setup.sh"

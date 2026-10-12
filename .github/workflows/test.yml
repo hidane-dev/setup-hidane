@@ -1,0 +1,216 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: shellcheck
+        run: shellcheck setup.sh test/*.sh
+      - name: actionlint
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v$VERSION/$archive"
+          echo "$SHA256  $archive" | sha256sum --check
+          tar -xzf "$archive" actionlint
+          ./actionlint -color
+
+  install:
+    name: install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "version=$(gh api repos/hidane-dev/hidane/releases/latest --jq '.tag_name | ltrimstr("v")')" >> "$GITHUB_OUTPUT"
+
+      - name: Install the latest release
+        id: latest
+        uses: ./
+      - name: Check
+        env:
+          EXPECTED_VERSION: ${{ steps.release.outputs.version }}
+          EXPECTED_CACHE_HIT: "false"
+          VERSION: ${{ steps.latest.outputs.version }}
+          BIN: ${{ steps.latest.outputs.path }}
+          CACHE_HIT: ${{ steps.latest.outputs.cache-hit }}
+        run: bash test/check.sh
+
+      - name: Install 0.3.0
+        id: pinned
+        uses: ./
+        with:
+          version: 0.3.0
+      - name: Check
+        env:
+          EXPECTED_VERSION: 0.3.0
+          VERSION: ${{ steps.pinned.outputs.version }}
+          BIN: ${{ steps.pinned.outputs.path }}
+          CACHE_HIT: ${{ steps.pinned.outputs.cache-hit }}
+        run: bash test/check.sh
+
+      # The same version again, written with a v: from the tool cache, verified again.
+      - name: Install v0.3.0 again
+        id: cached
+        uses: ./
+        with:
+          version: v0.3.0
+      - name: Check
+        env:
+          EXPECTED_VERSION: 0.3.0
+          EXPECTED_CACHE_HIT: "true"
+          VERSION: ${{ steps.cached.outputs.version }}
+          BIN: ${{ steps.cached.outputs.path }}
+          CACHE_HIT: ${{ steps.cached.outputs.cache-hit }}
+        run: bash test/check.sh
+
+      - name: Install without the attestation check
+        id: unattested
+        uses: ./
+        with:
+          version: 0.3.0
+          verify-attestation: false
+      - name: Check
+        env:
+          EXPECTED_VERSION: 0.3.0
+          VERSION: ${{ steps.unattested.outputs.version }}
+          BIN: ${{ steps.unattested.outputs.path }}
+          CACHE_HIT: ${{ steps.unattested.outputs.cache-hit }}
+        run: bash test/check.sh
+
+      # Inputs that must be refused.
+      - name: A malformed version
+        id: malformed
+        continue-on-error: true
+        uses: ./
+        with:
+          version: 0.3.0; echo injected
+      - name: A version that was never released
+        id: unreleased
+        continue-on-error: true
+        uses: ./
+        with:
+          version: 0.0.0
+      - name: A malformed verify-attestation
+        id: malformed-verify
+        continue-on-error: true
+        uses: ./
+        with:
+          verify-attestation: maybe
+      - name: Check the refusals
+        env:
+          MALFORMED: ${{ steps.malformed.outcome }}
+          UNRELEASED: ${{ steps.unreleased.outcome }}
+          MALFORMED_VERIFY: ${{ steps.malformed-verify.outcome }}
+        run: |
+          echo "malformed version: $MALFORMED, unreleased version: $UNRELEASED, malformed verify-attestation: $MALFORMED_VERIFY"
+          [[ $MALFORMED == failure && $UNRELEASED == failure && $MALFORMED_VERIFY == failure ]]
+
+  # The workflow token with no permissions at all: the action reads public data only.
+  no-permissions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: hidane
+        uses: ./
+      - name: Check
+        env:
+          EXPECTED_VERSION: ${{ steps.hidane.outputs.version }}
+          VERSION: ${{ steps.hidane.outputs.version }}
+          BIN: ${{ steps.hidane.outputs.path }}
+          CACHE_HIT: ${{ steps.hidane.outputs.cache-hit }}
+        run: bash test/check.sh
+
+  # The README's example: firebase-tools from a project's devDependencies, through hidane exec.
+  emulators-exec:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FIREBASE_TOOLS: 15.33.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./
+      - name: A project with firebase-tools
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir project
+          cd project
+          echo '{ "emulators": { "firestore": { "port": 8080 }, "ui": { "enabled": false } } }' > firebase.json
+          npm init --yes > /dev/null
+          npm install --save-dev --no-audit --no-fund "firebase-tools@$FIREBASE_TOOLS"
+      - name: hidane exec -- firebase emulators:exec
+        working-directory: ${{ runner.temp }}/project
+        run: |
+          hidane exec -- npx firebase emulators:exec --only firestore --project demo-setup-hidane \
+            "bash '$GITHUB_WORKSPACE/test/write-read.sh'"
+          # hidane served the emulator: firebase-tools did not download the official jar.
+          if ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar 2>/dev/null; then
+            echo "::error::firebase-tools downloaded the official emulator"
+            exit 1
+          fi
+
+  # The README's other example: hidane started in the background in one step, used in the next.
+  background:
+    name: background (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./
+      - name: Start hidane
+        run: |
+          hidane --host 127.0.0.1 --port 8080 > "$RUNNER_TEMP/hidane.log" 2>&1 &
+          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/
+      - name: Write and read
+        env:
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+        run: bash test/write-read.sh
+      - name: Stop hidane
+        if: always()
+        run: |
+          curl -fsS -X POST http://127.0.0.1:8080/shutdown || true
+          cat "$RUNNER_TEMP/hidane.log"
