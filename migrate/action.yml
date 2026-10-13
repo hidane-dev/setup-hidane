@@ -51,7 +51,7 @@ inputs:
 
 outputs:
   changed:
-    description: "`true` when `hidane migrate` proposed changes (committed, and pushed unless dry-run), `false` when it found nothing to change."
+    description: "`true` when `hidane migrate` proposed changes, `false` when it found nothing to change."
     value: ${{ steps.migrate.outputs.changed }}
   branch:
     description: The branch with the changes.
