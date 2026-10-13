@@ -1,0 +1,99 @@
+name: Migrate to hidane
+description: >-
+  Open a pull request that moves a project's tests from the official Firestore emulator to hidane,
+  with the changes `hidane migrate` proposes. Opt-in: run it from a workflow you start by hand.
+author: hidane-dev
+branding:
+  icon: git-pull-request
+  color: orange
+
+inputs:
+  token:
+    description: >-
+      The token that pushes the branch and opens the pull request. The workflow's token, the
+      default, needs `contents: write` and `pull-requests: write`, cannot push changes to
+      `.github/workflows/`, and opens pull requests that start no workflow; a GitHub App token or a
+      fine-grained personal access token with the Workflows permission does both (see the README).
+    required: false
+    default: ${{ github.token }}
+  base:
+    description: >-
+      The branch the pull request merges into, and the one the changes are made from (its tip on
+      `origin`). Defaults to the branch checked out, or else the one the workflow runs on.
+    required: false
+    default: ""
+  branch:
+    description: >-
+      The branch to create, which must not exist yet. Defaults to `hidane/migrate-<the first seven
+      characters of the base commit>`.
+    required: false
+    default: ""
+  draft:
+    description: Open the pull request as a draft (`true` or `false`).
+    required: false
+    default: "true"
+  hidane-version:
+    description: >-
+      The hidane to run: `latest`, an exact version such as `0.5.0`, or `installed` for the
+      `hidane` already on PATH. `hidane migrate` is in the releases after 0.4.0.
+    required: false
+    default: latest
+  path:
+    description: The project's directory in the repository checked out.
+    required: false
+    default: .
+  dry-run:
+    description: >-
+      `true` makes the commit on a local branch and prints the pull request it would open, without
+      pushing or opening anything; it runs on any event.
+    required: false
+    default: "false"
+
+outputs:
+  changed:
+    description: "`true` when `hidane migrate` proposed changes (committed, and pushed unless dry-run), `false` when it found nothing to change."
+    value: ${{ steps.migrate.outputs.changed }}
+  branch:
+    description: The branch with the changes.
+    value: ${{ steps.migrate.outputs.branch }}
+  commit:
+    description: The commit with the changes.
+    value: ${{ steps.migrate.outputs.commit }}
+  pull-request-url:
+    description: The pull request opened, or the open one the branch already had; empty in a dry run.
+    value: ${{ steps.migrate.outputs.pull-request-url }}
+  body-file:
+    description: The pull request's body, a Markdown file (written in a dry run too).
+    value: ${{ steps.migrate.outputs.body-file }}
+  plan-file:
+    description: "The plan `hidane migrate --format json` printed (`hidane.migrate/1`)."
+    value: ${{ steps.migrate.outputs.plan-file }}
+  hidane-version:
+    description: The version of hidane that made the plan.
+    value: ${{ steps.migrate.outputs.hidane-version }}
+
+runs:
+  using: composite
+  steps:
+    # The root action's script, from the same commit of this repository: the same SHA-256 and
+    # provenance checks. It reads public data only, so it gets the workflow's token.
+    - id: install
+      if: inputs.hidane-version != 'installed'
+      shell: bash
+      env:
+        SETUP_HIDANE_VERSION: ${{ inputs.hidane-version }}
+        SETUP_HIDANE_VERIFY_ATTESTATION: "true"
+        SETUP_HIDANE_TOKEN: ${{ github.token }}
+      run: bash "$GITHUB_ACTION_PATH/../setup.sh"
+    - id: migrate
+      shell: bash
+      env:
+        SETUP_HIDANE_MIGRATE_BIN: ${{ steps.install.outputs.path }}
+        SETUP_HIDANE_MIGRATE_TOKEN: ${{ inputs.token }}
+        SETUP_HIDANE_MIGRATE_WORKFLOW_TOKEN: ${{ github.token }}
+        SETUP_HIDANE_MIGRATE_BASE: ${{ inputs.base }}
+        SETUP_HIDANE_MIGRATE_BRANCH: ${{ inputs.branch }}
+        SETUP_HIDANE_MIGRATE_DRAFT: ${{ inputs.draft }}
+        SETUP_HIDANE_MIGRATE_PATH: ${{ inputs.path }}
+        SETUP_HIDANE_MIGRATE_DRY_RUN: ${{ inputs.dry-run }}
+      run: bash "$GITHUB_ACTION_PATH/migrate.sh"

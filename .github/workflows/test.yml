@@ -26,7 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - name: shellcheck
-        run: shellcheck setup.sh test/*.sh
+        run: shellcheck setup.sh migrate/*.sh test/*.sh
       - name: actionlint
         env:
           VERSION: 1.7.12
@@ -214,3 +214,151 @@ jobs:
         run: |
           curl -fsS -X POST http://127.0.0.1:8080/shutdown || true
           cat "$RUNNER_TEMP/hidane.log"
+
+  # The migrate sub-action, on fixture repositories made in the job, each with a bare repository as
+  # origin: dry runs, which commit on a local branch and push nothing, and the inputs and states it
+  # must refuse. No release has `hidane migrate` yet (the releases after 0.4.0 will), so hidane is
+  # built from a commit of its main branch; once one has it, this job installs that release.
+  migrate:
+    name: migrate (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      # hidane-dev/hidane main, after hidane migrate (#219).
+      HIDANE_REV: 23c523e9b185e621228bef0b1ab3fc88a451cf79
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build hidane from main
+        run: |
+          src="$RUNNER_TEMP/hidane-src"
+          git init --quiet "$src"
+          git -C "$src" fetch --quiet --depth 1 https://github.com/hidane-dev/hidane "$HIDANE_REV"
+          git -C "$src" checkout --quiet FETCH_HEAD
+          cargo install --quiet --locked --debug --path "$src/crates/hidane" --root "$RUNNER_TEMP/hidane-main"
+          echo "$RUNNER_TEMP/hidane-main/bin" >> "$GITHUB_PATH"
+      - name: Fixtures
+        run: |
+          for state in official hidane dirty; do
+            bash test/migrate-fixture.sh "$RUNNER_TEMP/$state" "$state"
+          done
+          bash test/migrate-fixture.sh "$RUNNER_TEMP/push" official
+          # The branch the action would create, already on origin.
+          bash test/migrate-fixture.sh "$RUNNER_TEMP/existing" official
+          project="$RUNNER_TEMP/existing/project"
+          git -C "$project" push --quiet origin "HEAD:refs/heads/hidane/migrate-$(git -C "$project" rev-parse HEAD | cut -c 1-7)"
+
+      - name: Dry run
+        id: dry-run
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/official/project
+          hidane-version: installed
+          dry-run: true
+      - name: Check
+        env:
+          PROJECT: ${{ runner.temp }}/official/project
+          EXPECTED: changed
+          CHANGED: ${{ steps.dry-run.outputs.changed }}
+          BRANCH: ${{ steps.dry-run.outputs.branch }}
+          COMMIT: ${{ steps.dry-run.outputs.commit }}
+          PULL_REQUEST_URL: ${{ steps.dry-run.outputs.pull-request-url }}
+          BODY_FILE: ${{ steps.dry-run.outputs.body-file }}
+          PLAN_FILE: ${{ steps.dry-run.outputs.plan-file }}
+          HIDANE_VERSION: ${{ steps.dry-run.outputs.hidane-version }}
+        run: bash test/migrate-check.sh
+
+      # A project already moved to hidane: hidane migrate finds nothing, and the action stops.
+      - name: Nothing to change
+        id: unchanged
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/hidane/project
+          hidane-version: installed
+          dry-run: true
+      - name: Check
+        env:
+          PROJECT: ${{ runner.temp }}/hidane/project
+          EXPECTED: unchanged
+          CHANGED: ${{ steps.unchanged.outputs.changed }}
+          BRANCH: ${{ steps.unchanged.outputs.branch }}
+          COMMIT: ${{ steps.unchanged.outputs.commit }}
+          PULL_REQUEST_URL: ${{ steps.unchanged.outputs.pull-request-url }}
+          BODY_FILE: ${{ steps.unchanged.outputs.body-file }}
+          PLAN_FILE: ${{ steps.unchanged.outputs.plan-file }}
+          HIDANE_VERSION: ${{ steps.unchanged.outputs.hidane-version }}
+        run: bash test/migrate-check.sh
+
+      # What must be refused.
+      - name: Uncommitted changes
+        id: dirty
+        continue-on-error: true
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/dirty/project
+          hidane-version: installed
+          dry-run: true
+      - name: A branch that exists on origin
+        id: existing
+        continue-on-error: true
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/existing/project
+          hidane-version: installed
+          dry-run: true
+      - name: A malformed branch
+        id: malformed-branch
+        continue-on-error: true
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/hidane/project
+          hidane-version: installed
+          dry-run: true
+          branch: hidane/migrate..$(echo injected)
+      - name: A malformed draft
+        id: malformed-draft
+        continue-on-error: true
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/hidane/project
+          hidane-version: installed
+          dry-run: true
+          draft: maybe
+      # Outside workflow_dispatch, nothing is pushed. When this workflow is started by hand, the
+      # changes to .github/workflows/ with the workflow's token are refused instead.
+      - name: A push outside workflow_dispatch
+        id: push
+        continue-on-error: true
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/push/project
+          hidane-version: installed
+      # Last: it puts hidane 0.4.0 on PATH.
+      - name: hidane 0.4.0, which has no hidane migrate
+        id: old
+        continue-on-error: true
+        uses: ./migrate
+        with:
+          path: ${{ runner.temp }}/hidane/project
+          hidane-version: 0.4.0
+          dry-run: true
+      - name: Check the refusals
+        env:
+          DIRTY: ${{ steps.dirty.outcome }}
+          EXISTING: ${{ steps.existing.outcome }}
+          MALFORMED_BRANCH: ${{ steps.malformed-branch.outcome }}
+          MALFORMED_DRAFT: ${{ steps.malformed-draft.outcome }}
+          PUSH: ${{ steps.push.outcome }}
+          OLD: ${{ steps.old.outcome }}
+        run: |
+          echo "uncommitted changes: $DIRTY, existing branch: $EXISTING, malformed branch: $MALFORMED_BRANCH, malformed draft: $MALFORMED_DRAFT, push: $PUSH, hidane 0.4.0: $OLD"
+          [[ $DIRTY == failure && $EXISTING == failure && $MALFORMED_BRANCH == failure && $MALFORMED_DRAFT == failure && $PUSH == failure && $OLD == failure ]]
+          # Nothing reached an origin but the branch the fixture put there.
+          for state in official hidane dirty push; do
+            [[ $(git -C "$RUNNER_TEMP/$state/origin.git" for-each-ref --format='%(refname)' refs/heads) == refs/heads/main ]]
+          done
