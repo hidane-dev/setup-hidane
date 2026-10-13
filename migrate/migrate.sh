@@ -132,7 +132,7 @@ if [[ -n $repository && ${GITHUB_RUN_ID:-} =~ $re ]]; then
   run_link=" in [this workflow run]($server/$repository/actions/runs/$GITHUB_RUN_ID)"
 fi
 
-# hidane, with `hidane migrate`, which the releases up to 0.4.0 do not have: 0.4.0 answers
+# hidane, with `hidane migrate`, which the releases before 0.5.0 do not have: 0.4.0 answers
 # `hidane migrate --help` with the emulator's usage, so the usage is checked.
 bin=${SETUP_HIDANE_MIGRATE_BIN:-}
 if [[ -z $bin ]]; then
@@ -150,7 +150,7 @@ minor=$((10#${BASH_REMATCH[2]}))
 version="$major.$minor.$((10#${BASH_REMATCH[3]}))"
 if ((major == 0 && minor < 4)) ||
   [[ $("$bin" migrate --help 2> /dev/null || true) != *"Usage: hidane migrate"* ]]; then
-  fail "hidane $version has no hidane migrate, which is in the releases after 0.4.0: set hidane-version to one of them, or to latest once one is out"
+  fail "hidane $version has no hidane migrate, which is in 0.5.0 and later: set hidane-version to latest or to one of them"
 fi
 echo "Using hidane $version ($bin)"
 output hidane-version "$version"

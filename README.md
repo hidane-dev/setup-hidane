@@ -152,8 +152,8 @@ Firestore emulator. hidane makes the plan and the edits; the action applies them
 commits, pushes and opens the pull request.
 
 It is opt-in: it runs when you start the workflow below by hand (`workflow_dispatch`), in your
-repository, and never on a schedule or on any other event. `hidane migrate` is in the hidane
-releases after 0.4.0; with an earlier one, the action stops and says so.
+repository, and never on a schedule or on any other event. `hidane migrate` is in hidane 0.5.0
+and later; with an earlier release, the action stops and says so.
 
 ### The workflow
 

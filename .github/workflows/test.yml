@@ -217,8 +217,8 @@ jobs:
 
   # The migrate sub-action, on fixture repositories made in the job, each with a bare repository as
   # origin: dry runs, which commit on a local branch and push nothing, and the inputs and states it
-  # must refuse. No release has `hidane migrate` yet (the releases after 0.4.0 will), so hidane is
-  # built from a commit of its main branch; once one has it, this job installs that release.
+  # must refuse. The first dry run installs hidane 0.5.0, the first release with `hidane migrate`,
+  # through the action's hidane-version input; the later steps use it from PATH.
   migrate:
     name: migrate (${{ matrix.os }})
     strategy:
@@ -227,21 +227,10 @@ jobs:
         os: [ubuntu-24.04, macos-14]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    env:
-      # hidane-dev/hidane main, after hidane migrate (#219).
-      HIDANE_REV: 23c523e9b185e621228bef0b1ab3fc88a451cf79
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build hidane from main
-        run: |
-          src="$RUNNER_TEMP/hidane-src"
-          git init --quiet "$src"
-          git -C "$src" fetch --quiet --depth 1 https://github.com/hidane-dev/hidane "$HIDANE_REV"
-          git -C "$src" checkout --quiet FETCH_HEAD
-          cargo install --quiet --locked --debug --path "$src/crates/hidane" --root "$RUNNER_TEMP/hidane-main"
-          echo "$RUNNER_TEMP/hidane-main/bin" >> "$GITHUB_PATH"
       - name: Fixtures
         run: |
           for state in official hidane dirty; do
@@ -258,7 +247,7 @@ jobs:
         uses: ./migrate
         with:
           path: ${{ runner.temp }}/official/project
-          hidane-version: installed
+          hidane-version: 0.5.0
           dry-run: true
       - name: Check
         env:
