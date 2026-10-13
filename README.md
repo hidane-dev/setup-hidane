@@ -30,7 +30,7 @@ steps:
 ```yaml
 - uses: hidane-dev/setup-hidane@v1
   with:
-    version: 0.4.0 # or v0.4.0
+    version: 0.5.0 # or v0.5.0
 ```
 
 ### Under firebase-tools
@@ -71,7 +71,7 @@ steps:
 
 | Input | Default | Description |
 |---|---|---|
-| `version` | `latest` | `latest`, resolved through the GitHub API (`releases/latest`), or an exact version: `0.4.0` or `v0.4.0`. Anything else is refused. |
+| `version` | `latest` | `latest`, resolved through the GitHub API (`releases/latest`), or an exact version: `0.5.0` or `v0.5.0`. Anything else is refused. |
 | `verify-attestation` | `true` | `true` verifies the archive's build provenance attestation with `gh attestation verify`; when `gh` is not on `PATH` (some self-hosted runners and container jobs), the check is skipped with a notice. `false` skips it. |
 | `token` | `${{ github.token }}` | Used for the GitHub API and `gh`, for public data only: the job needs no extra permissions. It is sent to github.com only. |
 
@@ -79,7 +79,7 @@ steps:
 
 | Output | Description |
 |---|---|
-| `version` | The installed version, such as `0.4.0`. |
+| `version` | The installed version, such as `0.5.0`. |
 | `path` | The absolute path of the `hidane` binary (`hidane.exe` on Windows). |
 | `cache-hit` | `true` when the archive came from the runner's tool cache, `false` when it was downloaded. |
 
