@@ -30,7 +30,7 @@ steps:
 ```yaml
 - uses: hidane-dev/setup-hidane@v1
   with:
-    version: 0.5.0 # or v0.5.0
+    version: 0.5.1 # or v0.5.1
 ```
 
 ### Under firebase-tools
@@ -71,7 +71,7 @@ steps:
 
 | Input | Default | Description |
 |---|---|---|
-| `version` | `latest` | `latest`, resolved through the GitHub API (`releases/latest`), or an exact version: `0.5.0` or `v0.5.0`. Anything else is refused. |
+| `version` | `latest` | `latest`, resolved through the GitHub API (`releases/latest`), or an exact version: `0.5.1` or `v0.5.1`. Anything else is refused. |
 | `verify-attestation` | `true` | `true` verifies the archive's build provenance attestation with `gh attestation verify`; when `gh` is not on `PATH` (some self-hosted runners and container jobs), the check is skipped with a notice. `false` skips it. |
 | `token` | `${{ github.token }}` | Used for the GitHub API and `gh`, for public data only: the job needs no extra permissions. It is sent to github.com only. |
 
@@ -79,7 +79,7 @@ steps:
 
 | Output | Description |
 |---|---|
-| `version` | The installed version, such as `0.5.0`. |
+| `version` | The installed version, such as `0.5.1`. |
 | `path` | The absolute path of the `hidane` binary (`hidane.exe` on Windows). |
 | `cache-hit` | `true` when the archive came from the runner's tool cache, `false` when it was downloaded. |
 
@@ -272,7 +272,7 @@ changed.
 | `base` | the branch checked out | The branch the pull request merges into, whose tip on `origin` the changes are made from. When no branch is checked out, the branch the workflow runs on. |
 | `branch` | `hidane/migrate-<commit>` | The branch to create; it must not exist on `origin`. |
 | `draft` | `true` | Open the pull request as a draft. Private repositories on some plans have no drafts: set `false` there. |
-| `hidane-version` | `latest` | `latest`, an exact version such as `0.5.0`, or `installed` for the `hidane` an earlier step put on `PATH`. |
+| `hidane-version` | `latest` | `latest`, an exact version such as `0.5.1`, or `installed` for the `hidane` an earlier step put on `PATH`. |
 | `path` | `.` | The project's directory in the repository, as `hidane migrate --path` takes it. |
 | `dry-run` | `false` | `true` commits on a local branch and prints the pull request's body to the log and the job summary, without pushing or opening anything. It is the only mode that runs on events other than `workflow_dispatch`. |
 

@@ -34,7 +34,7 @@ inputs:
     default: "true"
   hidane-version:
     description: >-
-      The hidane to run: `latest`, an exact version such as `0.5.0`, or `installed` for the
+      The hidane to run: `latest`, an exact version such as `0.5.1`, or `installed` for the
       `hidane` already on PATH. `hidane migrate` is in 0.5.0 and later.
     required: false
     default: latest

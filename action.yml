@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: The hidane version to install, `latest` or an exact version such as `0.5.0` or `v0.5.0`.
+    description: The hidane version to install, `latest` or an exact version such as `0.5.1` or `v0.5.1`.
     required: false
     default: latest
   verify-attestation:
@@ -23,7 +23,7 @@ inputs:
 
 outputs:
   version:
-    description: The installed version, such as `0.5.0`.
+    description: The installed version, such as `0.5.1`.
     value: ${{ steps.setup.outputs.version }}
   path:
     description: The absolute path of the `hidane` binary (`hidane.exe` on Windows).
